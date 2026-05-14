@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TalkNow — Chat Real-Time</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/ably@1.2.48/ably.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0D1117;--bg2:#161B22;--bg3:#21262D;--surface:#1C2128;
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.14);
+  --green:#25D366;--teal:#00BFA5;--gdim:rgba(37,211,102,0.12);
+  --text:#E6EDF3;--text2:#8B949E;--text3:#484F58;
+  --out:#005C4B;--in:#1E2530;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;overflow:hidden;-webkit-tap-highlight-color:transparent;}
+.screen{position:fixed;inset:0;z-index:1;display:none;flex-direction:column;background:var(--bg);}
+.screen.active{display:flex;}
+
+/* LOGIN */
+#ls{align-items:center;justify-content:center;padding:24px;}
+.blob{position:absolute;border-radius:50%;filter:blur(90px);opacity:.15;pointer-events:none;}
+.b1{width:320px;height:320px;background:#25D366;top:-100px;left:-80px;}
+.b2{width:260px;height:260px;background:#00BFA5;bottom:-80px;right:-60px;}
+.card{position:relative;z-index:1;width:100%;max-width:380px;background:var(--bg2);border:1px solid var(--border2);border-radius:28px;padding:36px 28px;}
+.aicon{width:68px;height:68px;border-radius:20px;background:linear-gradient(135deg,var(--green),var(--teal));display:flex;align-items:center;justify-content:center;font-size:34px;margin:0 auto 16px;box-shadow:0 8px 28px rgba(37,211,102,.25);}
+.ltitle{font-size:24px;font-weight:800;text-align:center;letter-spacing:-.5px;margin-bottom:4px;}
+.lsub{font-size:13px;color:var(--text2);text-align:center;margin-bottom:26px;line-height:1.5;}
+.lbl{font-size:11px;font-weight:600;color:var(--text2);letter-spacing:.6px;text-transform:uppercase;margin-bottom:6px;}
+.grp{margin-bottom:14px;}
+.inp{background:var(--bg3);border:1.5px solid var(--border2);border-radius:13px;padding:13px 15px;color:var(--text);font-family:inherit;font-size:15px;outline:none;width:100%;transition:border-color .2s;}
+.inp::placeholder{color:var(--text3);}
+.inp:focus{border-color:var(--green);}
+.rrow{display:flex;gap:8px;}
+.rrow .inp{flex:1;}
+.dice{padding:0 14px;background:var(--bg3);border:1.5px solid var(--border2);border-radius:13px;font-size:20px;cursor:pointer;transition:all .2s;flex-shrink:0;}
+.dice:hover{border-color:var(--green);}
+.lbtn{width:100%;padding:15px;background:linear-gradient(135deg,var(--green),var(--teal));border:none;border-radius:13px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-top:6px;box-shadow:0 4px 18px rgba(37,211,102,.28);transition:opacity .2s;}
+.lbtn:active{opacity:.88;}
+.lerr{font-size:12px;color:#F87171;text-align:center;margin-top:8px;display:none;}
+.divhr{display:flex;align-items:center;gap:10px;margin:18px 0;color:var(--text3);font-size:12px;}
+.divhr::before,.divhr::after{content:'';flex:1;height:1px;background:var(--border);}
+.rlbl{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px;}
+.chips{display:flex;flex-wrap:wrap;gap:6px;}
+.chip{padding:5px 13px;background:var(--surface);border:1px solid var(--border2);border-radius:100px;font-size:12px;color:var(--text2);cursor:pointer;transition:all .2s;}
+.chip:hover{border-color:var(--green);color:var(--green);}
+
+/* OVERLAY */
+#ov{position:fixed;inset:0;z-index:200;background:rgba(13,17,23,.93);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;}
+#ov.show{display:flex;}
+.spin{width:38px;height:38px;border:3px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:sp .8s linear infinite;}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ovtxt{font-size:14px;color:var(--text2);}
+.overr{font-size:13px;color:#F87171;text-align:center;max-width:260px;display:none;}
+.rtrybtn{padding:10px 24px;background:var(--green);border:none;border-radius:10px;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;display:none;}
+
+/* TOPBAR */
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:10px 14px;display:flex;align-items:center;gap:11px;min-height:62px;position:relative;z-index:10;flex-shrink:0;}
+.bk{width:36px;height:36px;border-radius:10px;background:var(--bg3);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;color:var(--text2);flex-shrink:0;}
+.rav{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--teal));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;position:relative;}
+.rdot{position:absolute;bottom:1px;right:1px;width:11px;height:11px;border-radius:50%;background:var(--green);border:2px solid var(--bg2);}
+.ci{flex:1;min-width:0;}
+.cname{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cst{font-size:12px;color:var(--green);margin-top:1px;}
+.stbar{position:absolute;top:50%;right:14px;transform:translateY(-50%);font-size:11px;font-weight:600;padding:3px 10px;border-radius:100px;}
+.stok{background:rgba(37,211,102,.15);color:var(--green);}
+.sterr{background:rgba(248,113,113,.15);color:#F87171;}
+.stwait{background:rgba(255,255,255,.07);color:var(--text3);}
+
+/* BANNER */
+.banner{background:rgba(37,211,102,.07);border-bottom:1px solid rgba(37,211,102,.12);padding:7px 14px;display:flex;align-items:center;justify-content:space-between;font-size:12px;flex-shrink:0;z-index:5;}
+.rcode{font-weight:700;color:var(--green);font-size:13px;letter-spacing:.5px;cursor:pointer;}
+.cpybtn{padding:3px 10px;background:var(--gdim);border:1px solid rgba(37,211,102,.25);border-radius:100px;font-size:11px;font-weight:600;color:var(--green);cursor:pointer;}
+.olive{display:flex;align-items:center;gap:5px;color:var(--text2);}
+.odot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.5)}}
+
+/* MESSAGES */
+.msgs{flex:1;overflow-y:auto;padding:14px 12px;display:flex;flex-direction:column;gap:2px;scroll-behavior:smooth;}
+.msgs::-webkit-scrollbar{width:3px;}
+.msgs::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+.ddiv{text-align:center;margin:10px 0 6px;}
+.ddiv span{background:var(--bg2);border:1px solid var(--border);padding:4px 13px;border-radius:100px;font-size:11px;font-weight:600;color:var(--text3);}
+.sys{text-align:center;margin:5px 0;font-size:11px;color:var(--text3);}
+.sys span{background:var(--bg2);border:1px solid var(--border);padding:3px 12px;border-radius:100px;}
+.mrow{display:flex;margin-bottom:1px;}
+.out{justify-content:flex-end;}
+.mrow.in+.mrow.out,.mrow.out+.mrow.in{margin-top:7px;}
+.bub{max-width:75%;padding:8px 12px 6px;border-radius:17px;word-break:break-word;line-height:1.45;animation:pop .18s cubic-bezier(.34,1.56,.64,1);}
+@keyframes pop{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+.out .bub{background:var(--out);border-bottom-right-radius:4px;color:#E7FFDB;}
+.mrow.in .bub{background:var(--in);border-bottom-left-radius:4px;border:1px solid var(--border);color:var(--text);}
+.bsnd{font-size:11px;font-weight:700;color:var(--green);margin-bottom:2px;}
+.btxt{font-size:14px;}
+.bmeta{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:2px;}
+.btime{font-size:10px;opacity:.55;}
+.out .btime{color:#E7FFDB;}
+.tick{font-size:12px;opacity:.6;}
+
+/* TYPING */
+.tyrow{display:none;align-items:center;gap:5px;padding:9px 13px;background:var(--in);border:1px solid var(--border);border-radius:17px;border-bottom-left-radius:4px;width:fit-content;margin:4px 12px;animation:pop .18s ease;}
+.tyrow.show{display:flex;}
+.td{width:6px;height:6px;border-radius:50%;background:var(--text2);animation:tb 1.2s infinite;}
+.td:nth-child(2){animation-delay:.2s;}.td:nth-child(3){animation-delay:.4s;}
+@keyframes tb{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-7px)}}
+.twho{font-size:11px;color:var(--text2);margin-left:3px;}
+
+/* INPUT */
+.inpa{background:var(--bg2);border-top:1px solid var(--border);padding:9px 11px;display:flex;align-items:flex-end;gap:8px;flex-shrink:0;position:relative;z-index:10;}
+.inpw{flex:1;display:flex;align-items:flex-end;gap:8px;background:var(--bg3);border:1.5px solid var(--border2);border-radius:24px;padding:9px 13px;transition:border-color .2s;}
+.inpw:focus-within{border-color:var(--green);}
+.ebtn{font-size:21px;cursor:pointer;opacity:.55;transition:opacity .2s;flex-shrink:0;line-height:1;}
+.ebtn:hover{opacity:1;}
+.minp{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:inherit;font-size:15px;resize:none;max-height:100px;line-height:1.45;}
+.minp::placeholder{color:var(--text3);}
+.sbtn{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--teal));border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;color:#fff;flex-shrink:0;transition:transform .15s;box-shadow:0 3px 12px rgba(37,211,102,.3);}
+.sbtn:active{transform:scale(.94);}
+.ep{position:absolute;bottom:68px;left:11px;background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:11px;display:none;flex-wrap:wrap;gap:5px;width:250px;z-index:30;box-shadow:0 8px 28px rgba(0,0,0,.5);}
+.ep.open{display:flex;}
+.e{font-size:23px;cursor:pointer;padding:4px;border-radius:8px;transition:background .12s;}
+.e:hover{background:var(--bg3);}
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(8px);background:var(--bg2);border:1px solid var(--border2);border-radius:100px;padding:8px 18px;font-size:13px;color:var(--text2);z-index:100;opacity:0;transition:all .28s;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="ls" class="screen active">
+  <div class="blob b1"></div><div class="blob b2"></div>
+  <div class="card">
+    <div class="aicon">💬</div>
+    <div class="ltitle">TalkNow</div>
+    <div class="lsub">Chat real-time antar HP.<br>Gunakan kode ruangan yang sama.</div>
+    <div class="grp">
+      <div class="lbl">Username kamu</div>
+      <input class="inp" id="ui" placeholder="Contoh: Andi, Budi..." maxlength="20" autocomplete="off">
+    </div>
+    <div class="grp">
+      <div class="lbl">Kode Ruangan</div>
+      <div class="rrow">
+        <input class="inp" id="ri" placeholder="Contoh: KAFE88" maxlength="8" autocomplete="off">
+        <button class="dice" onclick="genRoom()">🎲</button>
+      </div>
+    </div>
+    <button class="lbtn" onclick="doJoin()">Masuk ke Ruangan →</button>
+    <div class="lerr" id="lerr"></div>
+    <div class="divhr">riwayat ruangan</div>
+    <div class="rlbl">Terakhir digunakan</div>
+    <div class="chips" id="rchips"><span style="font-size:12px;color:var(--text3)">Belum ada</span></div>
+  </div>
+</div>
+
+<!-- OVERLAY CONNECTING -->
+<div id="ov">
+  <div class="spin" id="ov-spin"></div>
+  <div class="ovtxt" id="ovtxt">Menghubungkan...</div>
+  <div class="overr" id="overr"></div>
+  <button class="rtrybtn" id="rtrybtn" onclick="retryConn()">Coba Lagi</button>
+</div>
+
+<!-- CHAT -->
+<div id="cs" class="screen">
+  <div class="topbar">
+    <button class="bk" onclick="doLeave()">←</button>
+    <div class="rav" id="rav">?<div class="rdot"></div></div>
+    <div class="ci">
+      <div class="cname" id="cname">Ruangan</div>
+      <div class="cst" id="cst">menghubungkan...</div>
+    </div>
+    <div class="stbar stwait" id="stbar">⏳</div>
+  </div>
+  <div class="banner">
+    <div style="display:flex;align-items:center;gap:6px">
+      <span style="color:var(--text3)">Kode:</span>
+      <span class="rcode" id="rclbl" onclick="cpyRoom()">—</span>
+    </div>
+    <button class="cpybtn" onclick="cpyRoom()">📋 Bagikan</button>
+    <div class="olive"><span class="odot"></span><span id="ocnt">0 online</span></div>
+  </div>
+  <div class="msgs" id="msgs">
+    <div class="ddiv"><span id="tdlbl">Hari ini</span></div>
+  </div>
+  <div class="tyrow" id="tyrow">
+    <div class="td"></div><div class="td"></div><div class="td"></div>
+    <span class="twho" id="tywho"></span>
+  </div>
+  <div class="ep" id="ep">
+    <span class="e" onclick="ei('😀')">😀</span><span class="e" onclick="ei('😂')">😂</span>
+    <span class="e" onclick="ei('🥰')">🥰</span><span class="e" onclick="ei('😎')">😎</span>
+    <span class="e" onclick="ei('🤔')">🤔</span><span class="e" onclick="ei('😭')">😭</span>
+    <span class="e" onclick="ei('🔥')">🔥</span><span class="e" onclick="ei('❤️')">❤️</span>
+    <span class="e" onclick="ei('👍')">👍</span><span class="e" onclick="ei('👎')">👎</span>
+    <span class="e" onclick="ei('🎉')">🎉</span><span class="e" onclick="ei('😤')">😤</span>
+    <span class="e" onclick="ei('🤣')">🤣</span><span class="e" onclick="ei('😅')">😅</span>
+    <span class="e" onclick="ei('🙏')">🙏</span><span class="e" onclick="ei('✅')">✅</span>
+  </div>
+  <div class="inpa">
+    <div class="inpw">
+      <span class="ebtn" onclick="tgEmoji()">😊</span>
+      <textarea class="minp" id="minp" placeholder="Ketik pesan..." rows="1"
+        onkeydown="onKey(event)" oninput="onInp()"></textarea>
+    </div>
+    <button class="sbtn" onclick="doSend()">➤</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// =============================================================
+// TalkNow v2 — Real-time via Ably WebSocket (free tier)
+// Ably free: 6M msg/bulan, 200 koneksi simultan
+// Fallback: BroadcastChannel (same browser, multi-tab)
+// =============================================================
+
+// Ably API key — public key untuk demo, ganti dengan key kamu
+// dari ably.com (gratis, daftar 1 menit) untuk penggunaan produksi
+const ABLY_KEY = 'S9Lkzg.9h3P2w:MTNBJhqf3r5P2XjKIUFZtRWnVOxEa8DycQsGbm1le04';
+
+let ably=null, ch=null, me='', room='', members={}, tyTimer=null, lastDate='', ready=false, bc=null, fallback=false;
+let tyUsers={}, tyClear={};
+
+// ─── LOGIN ───
+function genRoom(){
+  const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  document.getElementById('ri').value=Array.from({length:6},()=>c[Math.floor(Math.random()*c.length)]).join('');
+}
+
+function doJoin(){
+  const u=document.getElementById('ui').value.trim();
+  const r=document.getElementById('ri').value.trim().toUpperCase();
+  const e=document.getElementById('lerr');
+  if(!u||!r){e.textContent='Isi username dan kode ruangan dulu!';e.style.display='block';setTimeout(()=>e.style.display='none',3000);return;}
+  me=u;room=r;
+  saveRecent(r);
+  showOv('Menghubungkan ke server...');
+  startAbly();
+}
+
+// ─── ABLY ───
+function startAbly(){
+  try{
+    if(ably){ably.close();ably=null;}
+    ably=new Ably.Realtime({
+      key:ABLY_KEY,
+      clientId:me,
+      disconnectedRetryTimeout:3000,
+      suspendedRetryTimeout:10000
+    });
+    ably.connection.on('connected',()=>{ready=true;setSt('ok','🟢 Terhubung');joinCh();});
+    ably.connection.on('failed',()=>startFallback());
+    ably.connection.on('disconnected',()=>{setSt('err','🔴 Terputus');document.getElementById('cst').textContent='Koneksi terputus, mencoba kembali...';});
+    ably.connection.on('connecting',()=>setSt('wait','⏳ Konek...'));
+    setTimeout(()=>{if(!ready)startFallback();},9000);
+  }catch(err){startFallback();}
+}
+
+function joinCh(){
+  ch=ably.channels.get('tn-'+room,{params:{rewind:'60'}});
+  ch.subscribe('m',(msg)=>{
+    const d=msg.data;
+    renderMsg(d.s,d.t,d.ts,d.s===me);
+    scrollBot();
+  });
+  ch.subscribe('ty',(msg)=>{
+    const d=msg.data;
+    if(d.u!==me)addTyper(d.u,d.on);
+  });
+  ch.presence.subscribe('enter',(m)=>{
+    members[m.clientId]=1;updOnline();
+    if(m.clientId!==me){renderSys(m.clientId+' bergabung 👋');scrollBot();}
+  });
+  ch.presence.subscribe('leave',(m)=>{
+    delete members[m.clientId];updOnline();
+    renderSys(m.clientId+' keluar');scrollBot();
+  });
+  ch.presence.get((_,ms)=>{if(ms)ms.forEach(m=>members[m.clientId]=1);updOnline();});
+  ch.presence.enter({u:me});
+  hideOv();openChat();
+}
+
+// ─── FALLBACK (BroadcastChannel) ───
+function startFallback(){
+  fallback=true;
+  try{
+    bc=new BroadcastChannel('tn_'+room);
+    bc.onmessage=(e)=>{
+      const d=e.data;
+      if(d.tp==='m'&&d.s!==me){renderMsg(d.s,d.t,d.ts,false);scrollBot();}
+      if(d.tp==='j'&&d.s!==me){members[d.s]=1;updOnline();renderSys(d.s+' bergabung 👋');scrollBot();}
+      if(d.tp==='l'&&d.s!==me){delete members[d.s];updOnline();renderSys(d.s+' keluar');scrollBot();}
+      if(d.tp==='ty'&&d.s!==me)addTyper(d.s,d.on);
+    };
+    bc.postMessage({tp:'j',s:me});
+    members[me]=1;updOnline();
+    setSt('wait','📡 Mode Lokal');
+    hideOv();openChat();
+    showToast('⚠️ Mode lokal aktif — hanya 1 browser. Untuk 2 HP, butuh internet.');
+  }catch(err){
+    showOvErr('Gagal terhubung. Periksa koneksi internet, lalu coba lagi.');
+  }
+}
+
+function retryConn(){
+  document.getElementById('ov-spin').style.display='block';
+  document.getElementById('overr').style.display='none';
+  document.getElementById('rtrybtn').style.display='none';
+  document.getElementById('ovtxt').textContent='Mencoba ulang...';
+  ready=false;fallback=false;
+  startAbly();
+}
+
+// ─── OPEN CHAT SCREEN ───
+function openChat(){
+  document.getElementById('ls').classList.remove('active');
+  document.getElementById('cs').classList.add('active');
+  document.getElementById('rav').childNodes[0].textContent=room[0];
+  document.getElementById('cname').textContent='🔐 '+room;
+  document.getElementById('rclbl').textContent=room;
+  document.getElementById('tdlbl').textContent=new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'});
+  document.getElementById('minp').focus();
+}
+
+// ─── SEND ───
+function doSend(){
+  const inp=document.getElementById('minp');
+  const txt=inp.value.trim();
+  if(!txt)return;
+  inp.value='';inp.style.height='auto';
+  clearTimeout(tyTimer);
+  if(!fallback&&ch)ch.publish('ty',{u:me,on:false});
+  else if(bc)bc.postMessage({tp:'ty',s:me,on:false});
+
+  const ts=Date.now();
+  if(!fallback&&ch){
+    ch.publish('m',{s:me,t:txt,ts});
+  }else if(bc){
+    bc.postMessage({tp:'m',s:me,t:txt,ts});
+    renderMsg(me,txt,ts,true);scrollBot();
+  }
+}
+
+// ─── RENDER ───
+function renderMsg(sender,text,ts,isMe){
+  const wrap=document.getElementById('msgs');
+  const d=new Date(ts);
+  const ds=d.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'});
+  if(ds!==lastDate){
+    lastDate=ds;
+    const dd=document.createElement('div');dd.className='ddiv';
+    dd.innerHTML='<span>'+ds+'</span>';wrap.appendChild(dd);
+  }
+  const row=document.createElement('div');
+  row.className='mrow '+(isMe?'out':'in');
+  const time=d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+  const sHtml=!isMe?'<div class="bsnd">'+esc(sender)+'</div>':'';
+  const tick=isMe?'<span class="tick">✓✓</span>':'';
+  row.innerHTML='<div class="bub">'+sHtml+'<div class="btxt">'+esc(text)+'</div><div class="bmeta"><span class="btime">'+time+'</span>'+tick+'</div></div>';
+  wrap.appendChild(row);
+}
+
+function renderSys(t){
+  const d=document.createElement('div');d.className='sys';
+  d.innerHTML='<span>'+esc(t)+'</span>';
+  document.getElementById('msgs').appendChild(d);
+}
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
+function scrollBot(){const el=document.getElementById('msgs');setTimeout(()=>el.scrollTop=el.scrollHeight,40);}
+
+// ─── TYPING ───
+function onInp(){
+  autoResize(document.getElementById('minp'));
+  if(!fallback&&ch)ch.publish('ty',{u:me,on:true});
+  else if(bc)bc.postMessage({tp:'ty',s:me,on:true});
+  clearTimeout(tyTimer);
+  tyTimer=setTimeout(()=>{
+    if(!fallback&&ch)ch.publish('ty',{u:me,on:false});
+    else if(bc)bc.postMessage({tp:'ty',s:me,on:false});
+  },2500);
+}
+
+function addTyper(user,on){
+  if(on){
+    tyUsers[user]=1;
+    clearTimeout(tyClear[user]);
+    tyClear[user]=setTimeout(()=>{delete tyUsers[user];updTyping();},3500);
+  }else{delete tyUsers[user];}
+  updTyping();
+}
+
+function updTyping(){
+  const names=Object.keys(tyUsers);
+  const row=document.getElementById('tyrow');
+  if(names.length){
+    row.classList.add('show');
+    document.getElementById('tywho').textContent=names.join(', ')+' sedang mengetik...';
+    scrollBot();
+  }else row.classList.remove('show');
+}
+
+// ─── PRESENCE ───
+function updOnline(){
+  const n=Object.keys(members).length;
+  document.getElementById('ocnt').textContent=n+' online';
+  document.getElementById('cst').textContent=n+' anggota online';
+}
+
+// ─── LEAVE ───
+function doLeave(){
+  if(ch){ch.presence.leave();ch.unsubscribe();ch=null;}
+  if(bc){bc.postMessage({tp:'l',s:me});bc.close();bc=null;}
+  if(ably){ably.close();ably=null;}
+  ready=false;fallback=false;members={};lastDate='';
+  document.getElementById('msgs').innerHTML='<div class="ddiv"><span id="tdlbl">Hari ini</span></div>';
+  document.getElementById('cs').classList.remove('active');
+  document.getElementById('ls').classList.add('active');
+}
+
+// ─── KEY / RESIZE ───
+function onKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();doSend();}}
+function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,100)+'px';}
+
+// ─── EMOJI ───
+function tgEmoji(){document.getElementById('ep').classList.toggle('open');}
+function ei(c){const i=document.getElementById('minp');i.value+=c;i.focus();document.getElementById('ep').classList.remove('open');}
+document.addEventListener('click',e=>{if(!e.target.closest('.ebtn')&&!e.target.closest('.ep'))document.getElementById('ep').classList.remove('open');});
+
+// ─── COPY ROOM ───
+function cpyRoom(){
+  const txt='Gabung chat bareng di TalkNow!\nKode Ruangan: '+room+'\nBuka chatapp.html, masuk dengan username berbeda, kode sama.';
+  if(navigator.clipboard)navigator.clipboard.writeText(txt).then(()=>showToast('✅ Kode ruangan disalin!'));
+  else showToast('Kode: '+room);
+}
+
+// ─── STATUS ───
+function setSt(t,txt){const el=document.getElementById('stbar');el.className='stbar st'+t;el.textContent=txt;}
+
+// ─── OVERLAY ───
+function showOv(txt){
+  document.getElementById('ovtxt').textContent=txt;
+  document.getElementById('overr').style.display='none';
+  document.getElementById('rtrybtn').style.display='none';
+  document.getElementById('ov-spin').style.display='block';
+  document.getElementById('ov').classList.add('show');
+}
+function hideOv(){document.getElementById('ov').classList.remove('show');}
+function showOvErr(msg){
+  document.getElementById('ovtxt').textContent='Koneksi gagal';
+  document.getElementById('overr').textContent=msg;
+  document.getElementById('overr').style.display='block';
+  document.getElementById('rtrybtn').style.display='block';
+  document.getElementById('ov-spin').style.display='none';
+}
+
+// ─── TOAST ───
+function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000);}
+
+// ─── RECENT ───
+function saveRecent(r){let rs=JSON.parse(localStorage.getItem('tn3r')||'[]');rs=[r,...rs.filter(x=>x!==r)].slice(0,6);localStorage.setItem('tn3r',JSON.stringify(rs));}
+function loadRecent(){
+  const rs=JSON.parse(localStorage.getItem('tn3r')||'[]');
+  const c=document.getElementById('rchips');
+  if(!rs.length)return;
+  c.innerHTML='';
+  rs.forEach(r=>{const el=document.createElement('div');el.className='chip';el.textContent=r;el.onclick=()=>document.getElementById('ri').value=r;c.appendChild(el);});
+}
+
+// ─── INIT ───
+document.addEventListener('DOMContentLoaded',()=>{
+  loadRecent();
+  const ri=document.getElementById('ri');
+  ri.addEventListener('input',()=>ri.value=ri.value.toUpperCase());
+  document.getElementById('ui').addEventListener('keydown',e=>{if(e.key==='Enter')ri.focus();});
+  ri.addEventListener('keydown',e=>{if(e.key==='Enter')doJoin();});
+});
+</script>
+</body>
+</html>
